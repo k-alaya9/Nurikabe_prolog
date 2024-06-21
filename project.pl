@@ -34,6 +34,8 @@ solve_cell(5,2,sea).
 solve_cell(5,3,sea).
 solve_cell(5,5,sea).
 
+
+%  to get all the green neighbors vertical or horzintal and put them in a list 
 green_neighbors(R, C, GreenNeighbors) :-
     findall((R, C1),
             (C1 is C + 1, solve_cell(R, C1, green);
@@ -41,7 +43,7 @@ green_neighbors(R, C, GreenNeighbors) :-
              R1 is R + 1, solve_cell(R1, C, green);
              R1 is R - 1, solve_cell(R1, C, green)),
             GreenNeighbors).
-
+%  to get all the sea neighbors vertical or horzintal and put them in a list 
 sea_neighbors(R, C, SeaNeighbors) :-
     findall((R, C1),
             (C1 is C + 1, solve_cell(R, C1, sea);
@@ -50,43 +52,27 @@ sea_neighbors(R, C, SeaNeighbors) :-
              R1 is R - 1, solve_cell(R1, C, sea)),
             SeaNeighbors).
 
-
-all_sea_neighbors(Row, Col, AllseaNeighbors) :-
-    solve_cell(Row, Col, sea), 
-    sea_neighbors(Row, Col, SeaNeighbors),
-    findall((NeighborRow, NeighborCol),
-            (member((NeighborRow, NeighborCol), SeaNeighbors),
-             solve_cell(NeighborRow, NeighborCol, sea)),
-            AllseaNeighbors).
-
-
-all_sea_neighbors_in_grid(AllseaNeighbors) :-
-    findall((Row, Col, SeaNeighbors),
-            (solve_cell(Row, Col, sea),
-             all_sea_neighbors(Row, Col, SeaNeighbors)),
-            AllseaNeighbors).
-
-
-all_connected_sea_cell_vertical_horizntal(B):-
-all_sea_neighbors_in_grid(AllseaNeighbors),
-length(AllseaNeighbors,B).
-
-
+% check if all seas have neighbors or they are not 
 check_all_sea_cells_have_neighbors([]).
 check_all_sea_cells_have_neighbors([(Row, Col)|Rest]) :-
     sea_neighbors(Row, Col, Neighbors),
     Neighbors \= [],
     check_all_sea_cells_have_neighbors(Rest).
-
+% to check if all the sea cells are connected 
 one_wall :-
-    all_connected_sea_cell_vertical_horizntal(NumConnectedseaCells),
+    all_column_sea_cells(Column),
+    all_sea_cells(Row),
+    findall(Result, merge_with_common_element(Row, Column, Result), Finalist),
+    findall(X, (merge_with_common_element_final(Finalist, R), sort(R, X)), FinalList),
+    remove_duplicates(FinalList, UniqueFinalList),
+    merge_lists_with_common_elements(UniqueFinalList, MergedFinalList),
+    !,
+    length(MergedFinalList,L),
+    L =:=1 ,
     findall((Row, Col),
             (solve_cell(Row, Col, sea)),
             AllseaCells),
-    length(AllseaCells, NumTotalseaCells),
-    NumConnectedseaCells =:= NumTotalseaCells,
     check_all_sea_cells_have_neighbors(AllseaCells).
-
 
 no_2_by_2_wall :-
     \+ (solve_cell(R, C, sea),
@@ -100,13 +86,11 @@ green_cell_between_two_fixed :-
     (   R1 =:= R2,
         C1 < C2,
         solve_cell(R1, C, green),
-        C > C1, C < C2,
-        \+ (solve_cell(R1, C3, green), C3 > C1, C3 < C2, C3 \= C)
+        C > C1, C < C2
     ;   C1 =:= C2,
         R1 < R2,
         solve_cell(R, C1, green),
-        R > R1, R < R2,
-        \+ (solve_cell(R3, C1, green), R3 > R1, R3 < R2, R3 \= R)
+        R > R1, R < R2
     ).
 check_all_green_cells_have_neighbors([]).
 check_all_green_cells_have_neighbors([(Row, Col)|Rest]) :-
@@ -142,78 +126,145 @@ solved :-
     one_fixed_cell_in_green,
     green_number_equals_size.
 
+% Predicate to find neighbors of cells in a list
+find_neighbors([], []).
+find_neighbors([(R, C)|T], Neighbors) :-
+    findall((R1, C1),
+            (
+                (R1 is R, C1 is C - 1, solve_cell(R1, C1, sea));
+                (R1 is R, C1 is C + 1, solve_cell(R1, C1, sea))
+            ),
+            Neighbors1),
+    find_neighbors(T, Neighbors2),
+    append(Neighbors1, Neighbors2, Neighbors).
 
-% has_one_fixed_cell(Component) :-
-%     findall(_, (member((X, Y), Component), fxd_cell(X, Y, _)), FxdCells),
-%     length(FxdCells, 1).
+% Predicate to find all sea cells in a specific row
+sea_cells_in_row(Row, SeaCells) :-
+    findall((Row, Col), solve_cell(Row, Col, sea), SeaCells).
 
-% connected_component([(X, Y)|Component], Color) :-
-%     connected(X, Y, Color),
-%     connected_component(Component, Color).
-% connected_component([], _).
+% Predicate to find all sea cells row by row and check connectivity
+all_sea_cells(SortedList) :-
+    findall(SeaCells, (between(1, 5, Row), sea_cells_in_row(Row, SeaCells)), AllSeaCellsList),
+    maplist(process_and_filter_neighbors, AllSeaCellsList, ProcessedLists) ,
+    sort(ProcessedLists, SortedList),
+    !.
 
-% path(C1, Color) :-
-%     setof((X, Y), solve_cell(X, Y, Color), Component),
-%     print(Component),
-%     create_lists(Component,C1),
-%      writeln(C1).
+% Predicate to process each list and filter disconnected parts
+process_and_filter_neighbors([], []).
+process_and_filter_neighbors(List, FilteredNeighbors) :-
+    find_neighbors(List, Neighbors),
+    filter_connected(List, Neighbors, FilteredNeighbors).
 
-% connect_lists(List1, List2, ConnectedList) :-
-%     intersection(List1, List2, CommonElements),
-%     CommonElements \= [],
-%     append(List1, List2, ConnectedList).
-% connect_elements(List, Paths) :-
-%     connect_elements(List, [], [], Paths).
-
-% connect_elements([], _, Acc, Acc).
-% connect_elements([Point|Rest], Visited, Acc, Paths) :-
-%     (   member(Point, Visited)
-%     ->  connect_elements(Rest, Visited, Acc, Paths)
-     
-%     ;   dfs(Point, Rest, Visited, Path),
-%         (   length(Path, Len),
-%             (   check_lengths(Acc, Len) -> AccNew = [Path]
-%             ;   AccNew = [Path|Acc]
-%             )
-%         ),
-%         connect_elements(Rest, [Point|Visited], AccNew, Paths)
-%     ).
-
-% check_lengths([], _).
-% check_lengths([P|Ps], Len) :-
-%     length(P, LenP),
-%     LenP < Len,
-%     check_lengths(Ps, Len).
-
-% dfs(Point, List, Visited, Path) :-
-%     findall(ConnectedPoint, (member(ConnectedPoint, List), connected(Point, ConnectedPoint), \+ member(ConnectedPoint, Visited)), ConnectedPoints),
-%     dfs_loop(Point, ConnectedPoints, List, Visited, [Point], Path).
-
-% dfs_loop(_, [], _, _, Path, Path).
-% dfs_loop(Point, [ConnectedPoint|ConnectedPoints], List, Visited, Acc, Path) :-
-%     \+ member(ConnectedPoint, Acc),
-%     dfs(ConnectedPoint, List, [ConnectedPoint|Visited], NewPath),
-%     append(NewPath, [Point], AccPath),
-%     dfs_loop(ConnectedPoint, ConnectedPoints, List, [ConnectedPoint|Visited], AccPath, Path).
-% connected((X1, Y1), (X2, Y2)) :-
-%     (X1 =:= X2 ; Y1 =:= Y2),
-%     abs(X1 - X2) + abs(Y1 - Y2) =:= 1.
+% Predicate to filter only the connected neighbors
+filter_connected([], _, []).
+filter_connected([H|T], Neighbors, [H|Filtered]) :-
+    member(H, Neighbors),
+    filter_connected(T, Neighbors, Filtered).
+filter_connected([H|T], Neighbors, Filtered) :-
+    \+ member(H, Neighbors),
+    filter_connected(T, Neighbors, Filtered).
 
 
-% create_lists(L, Lists) :-
-%     findall(fxd_cell(R, C, N), fxd_cell(R, C, N), FxdCells),
-%     create_lists(L, FxdCells, Lists).
 
-% create_lists(_, [], []).
-% create_lists(L, [fxd_cell(R, C, N)|FxdCells], [Sublist|Lists]) :-
-%     findall(Cell, (member(Cell, L), connected(Cell, (R, C))), SublistCells),
-%     length(SublistCells, N),
-%     append(SublistCells, Rest, L),
-%     connected_sublist(SublistCells, L),
-%     create_lists(Rest, FxdCells, Lists).
-% connected_sublist([], _).
-% connected_sublist([_], _).
-% connected_sublist([Cell1, Cell2|Cells], L) :-
-%     connected(Cell1, Cell2),
-%     connected_sublist([Cell2|Cells], L).
+find_column_neighbors([], []).
+find_column_neighbors([(R, C)|T], Neighbors) :-
+    findall((R1, C1),
+            (
+                (R1 is R - 1, C1 is C, solve_cell(R1, C1, sea));
+                (R1 is R + 1, C1 is C, solve_cell(R1, C1, sea))
+            ),
+            Neighbors1),
+    find_column_neighbors(T, Neighbors2),
+    append(Neighbors1, Neighbors2, Neighbors).
+
+% Predicate to find all sea cells in a specific column
+column_sea_cells(Col, SeaCells) :-
+    findall((Row, Col), solve_cell(Row, Col, sea), SeaCells).
+
+% Predicate to process each list and filter disconnected parts
+process_and_filter_neighborss([], []).
+process_and_filter_neighborss(List, FilteredNeighbors) :-
+    find_column_neighbors(List, Neighbors),
+    filter_connectedd(List, Neighbors, FilteredNeighbors).
+
+% Predicate to filter only the connected neighbors
+filter_connectedd([], _, []).
+filter_connectedd([H|T], Neighbors, [H|Filtered]) :-
+    member(H, Neighbors),
+    filter_connectedd(T, Neighbors, Filtered).
+filter_connectedd([H|T], Neighbors, Filtered) :-
+    \+ member(H, Neighbors),
+    filter_connectedd(T, Neighbors, Filtered).
+
+
+
+% Predicate to find all sea cells column by column
+all_column_sea_cells(SortedList) :-
+    findall(SeaCells, (between(1, 5, Col), column_sea_cells(Col, SeaCells)), AllSeaCellsList),
+    maplist(process_and_filter_neighborss, AllSeaCellsList, ProcessedLists) ,
+    sort(ProcessedLists, SortedList),
+    !.
+% Predicate to merge lists with common elements
+merge_lists_with_common_elements([], []).
+merge_lists_with_common_elements([H|T], Merged) :-
+    merge_lists_with_common_elements(T, Rest),
+    merge_list_with_all(H, Rest, Merged).
+
+merge_list_with_all(List, [], [List]).
+merge_list_with_all(List, [H|T], Merged) :-
+    ( have_common_element(List, H) ->
+        append(List, H, MergedList),
+        sort(MergedList, SortedMergedList),
+        merge_list_with_all(SortedMergedList, T, Merged)
+    ;   Merged = [H|Rest],
+        merge_list_with_all(List, T, Rest)
+    ).
+% Define predicate to check if two lists have a common element
+have_common_element(List1, List2) :-
+    member(Element, List1),
+    member(Element, List2).
+
+% Remove duplicate sublists
+remove_duplicates([], []).
+remove_duplicates([H|T], [H|Result]) :-
+    \+ member(H, T),
+    remove_duplicates(T, Result).
+remove_duplicates([H|T], Result) :-
+    member(H, T),
+    remove_duplicates(T, Result).
+
+test :-
+    all_column_sea_cells(Column),
+    all_sea_cells(Row),
+    findall(Result, merge_with_common_element(Row, Column, Result), Finalist),
+    findall(X, (merge_with_common_element_final(Finalist, R), sort(R, X)), FinalList),
+    remove_duplicates(FinalList, UniqueFinalList),
+    merge_lists_with_common_elements(UniqueFinalList, MergedFinalList),
+    !,
+    write(MergedFinalList),
+    length(MergedFinalList,L),
+    L =:=1 .
+merge_with_common_element(List1, List2, SortedList) :-
+    member(SubList1, List1),
+    member(SubList2, List2),
+    have_common_element(SubList1, SubList2),
+    append(SubList1, SubList2, MergedList),
+    sort(MergedList, SortedList).
+
+merge_with_common_element_final(List1, SortedList) :-
+    member(SubList1, List1),
+    member(SubList2, List1),
+    SubList1 \== SubList2,
+    have_common_element(SubList1, SubList2),
+    append(SubList1, SubList2, MergedList),
+    sort(MergedList, SortedList).
+
+example:-
+SortedList = [[], [(3, 1), (4, 1), (5, 1)], [(3, 5), (4, 5), (5, 5)]],
+N = [[], [(4, 3), (4, 4), (4, 5)], [(5, 1), (5, 2), (5, 3)]],
+findall(Result, merge_with_common_element(SortedList, N, Result), Finalist),
+% write(Finalist),
+merge_with_common_element_final(Finalist,Final),
+write(Final).
+
 
