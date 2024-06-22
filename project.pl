@@ -266,13 +266,14 @@ within_bounds(R, C) :-
 
 % Predicate to print a single cell
 print_cell(R, C) :-
-    (   solved_cell(R, C, green)
+    (   
+    fxd_cell(R, C, N)
+    ->  write(N)    % Print the number for fixed cells
+    ;  solved_cell(R, C, green)
     ->  write('G')  % Print 'G' for green cells
     ;   solved_cell(R, C, sea)
     ->  write('S')  % Print 'S' for sea cells
-    ;   fxd_cell(R, C, N)
-    ->  write(N)    % Print the number for fixed cells
-    ;   write('.')  % Print '.' for unspecified cells
+    ;    write('.')  % Print '.' for unspecified cells
     ),
     write(' ')
     .
