@@ -5,6 +5,7 @@ fxd_cell(3,4,1).
 fxd_cell(5,4,1).
 
 :- dynamic solved_cell/3.
+%% static solve
 % Solved cells with their colors (sea or green)
 % solved_cell(1, 2, green).
 % solved_cell(3,2,green).
@@ -259,19 +260,9 @@ merge_with_common_element_final(List1, SortedList) :-
     append(SubList1, SubList2, MergedList),
     sort(MergedList, SortedList).
 
-example:-
-SortedList = [[], [(3, 1), (4, 1), (5, 1)], [(3, 5), (4, 5), (5, 5)]],
-N = [[], [(4, 3), (4, 4), (4, 5)], [(5, 1), (5, 2), (5, 3)]],
-findall(Result, merge_with_common_element(SortedList, N, Result), Finalist),
-% write(Finalist),
-merge_with_common_element_final(Finalist,Final),
-write(Final).
-
-
 within_bounds(R, C) :-
   R > 0, R < 6,
     C > 0, C < 6.
-
 
 % Predicate to print a single cell
 print_cell(R, C) :-
@@ -282,7 +273,9 @@ print_cell(R, C) :-
     ;   fxd_cell(R, C, N)
     ->  write(N)    % Print the number for fixed cells
     ;   write('.')  % Print '.' for unspecified cells
-    ).
+    ),
+    write(' ')
+    .
 
 % Predicate to print a single row
 print_row(R, MaxC) :-
@@ -294,6 +287,7 @@ print_row(_, _).
 
 % Predicate to print the entire puzzle
 print_puzzle :-
+    nl,
     MaxR = 5, % Set the maximum number of rows
     MaxC = 5, % Set the maximum number of columns
     between(1, MaxR, R),
@@ -375,13 +369,12 @@ mark_diagonal_sea(R1, C1, R2, C2) :-
     ).
 
 %%rule 4
-fill_fxed_fill_green :-
-    (   fxd_cell(R, C, _),
-        within_bounds(R, C)
-        % \+ solved_cell(R, C, sea)
-    ->  assertz(solved_cell(R, C, green))
-    ;   true
-    ).
+mark_islands :-
+    fxd_cell(X, Y, _),
+    assertz(solved_cell(X, Y, green)), % Assume green for island cells
+    fail.
+mark_islands.
+
 %% rule 5
 surrounded_square :-
     solved_cell(R, C, _),
@@ -397,95 +390,17 @@ surrounded_square :-
         )
     ;   true
     ).
-expand_sea(R, C) :-
-    NeighborOffsets = [(0, 1), (0, -1), (1, 0), (-1, 0)],
-    mark_neighbors_sea(R, C, NeighborOffsets).
+
 %% rule 6
 sea_expansion :-
     solved_cell(R, C, sea),
     expand_sea(R, C).
 
-
-%% rule 7 
-% island_expansion_from_clue :-
-%     fxd_cell(R, C, N),
-%     N > 1,
-%     Count is N - 1,
-%     expand_island(R, C, Count).
-
-% expand_island(_, _, 0) :- !.
-% expand_island(R, C, Count) :-
-%     Count > 0,
-%     NeighborOffsets = [(0, 1), (0, -1), (1, 0), (-1, 0) ,(1,1),(1,-1),(-1,1),(-1,-1)],
-%     findall((NR, NC), (member((DR, DC), NeighborOffsets), NR is R + DR, NC is C + DC, within_bounds(NR, NC), \+ fxd_cell(NR, NC, _)), PossibleCells),
-%     (   PossibleCells = [(NR, NC)]
-%     ->  assertz(solved_cell(NR, NC, green)),
-%         NewCount is Count - 1,
-%         expand_island(NR, NC, NewCount)
-%     ;   true
-%     ).
-
-
-% Rule: Island expansion from a clue
-island_expansion_from_clue :-
-    fxd_cell(R, C, N),
-    N > 1,
-    count_green_neighbors(R, C, GreenCount),
-    RemainingCount is N - GreenCount - 1,
-    expand_island(R, C, RemainingCount).
-
-% Count the number of green neighbors around a cell
-count_green_neighbors(R, C, Count) :-
-    findall((NR, NC), (adjacent(R, C, NR, NC), solved_cell(NR, NC, green)), GreenNeighbors),
-    length(GreenNeighbors, Count).
-
-% Expand island by placing green cells
-expand_island(_, _, 0) :- !.
-expand_island(R, C, Count) :-
-    Count > 0,
-    findall((NR, NC), (adjacent(R, C, NR, NC),within_bounds(R, C) ,\+ solved_cell(NR, NC, _),  \+ fxd_cell(NR, NC, _)), PossibleCells),
-    length(PossibleCells, Length),
-    (   Length > 0
-    ->  maplist(assert_green_cell, PossibleCells),
-        NewCount is Count - Length,
-        expand_island(R, C, NewCount)
-    ;   true
-    ).
-
-% Assert a cell as green
-assert_green_cell((R, C)) :-
-    within_bounds(R, C),  % Ensure the position is valid
-
-    assertz(solved_cell(R, C, green)).
-
-island_continuity :-
-    solved_cell(R, C, _),
-    % Check for potential 2x2 sea formation
-    \+ (solved_cell(R, C1, sea), C1 is C + 1,
-        solved_cell(R1, C, sea), R1 is R + 1,
-        solved_cell(R1, C1, sea)),
-    (   \+ solved_cell(R, C, green),
-        within_bounds(R, C)
-    ->  assertz(solved_cell(R, C, green))
-    ;   true
-    ).
-
-surround_completed_island :-
-    fxd_cell(R, C, N),
-    completed_island(R, C, N),
+expand_sea(R, C) :-
     NeighborOffsets = [(0, 1), (0, -1), (1, 0), (-1, 0)],
     mark_neighbors_sea(R, C, NeighborOffsets).
 
-completed_island(R, C, N) :-
-    findall((NR, NC), (solved_cell(NR, NC, green), adjacent(R, C, NR, NC)), GreenCells),
-    length(GreenCells, N).
 
-adjacent(R, C, NR, NC) :-
-    NeighborOffsets = [(0, 1), (0, -1), (1, 0), (-1, 0)],
-    member((DR, DC), NeighborOffsets),
-    NR is R + DR,
-    NC is C + DC.
- 
 % Predicate to check if any cell is unsolved
 unsolved_cell_exists :-
     between(1, 5, R),
@@ -494,26 +409,89 @@ unsolved_cell_exists :-
     \+ fxd_cell(R, C, _),
     !.
 
-
 solve_puzzle :-
     clear_solved_cells,
+    mark_islands,
     solve_with_rules.
-
 solve_with_rules :-
-    ( unsolved_cell_exists
+    ( true
     ->  (   
+           
             island_of_1,
             clues_separated_by_one,
             diagonally_adjacent_clues,
             surrounded_square,
             sea_expansion,
-            island_expansion_from_clue,
-            % island_continuity,
-            % surround_completed_island,
-
+            island_expansion,
+            island_continuity,
             print_puzzle,
             ( solved -> ! ; fail )
         )
     ;   true
     ).
+%% rule 7: Island expansion from a clue
+island_expansion :-
+    fxd_cell(R, C, N),
+    expand_island(R, C, N).
 
+expand_island(R, C, N) :-
+    (   N =:= 1
+    ->  assertz(solved_cell(R, C, green))  
+    ;   Offsets = [(0, 1), (0, -1), (1, 0), (-1, 0)],
+        expand_island(R, C, N, Offsets)
+    ).
+
+expand_island(_, _, 0, _) :-!.
+expand_island(R, C, N, [(DR, DC)|Offsets]) :-
+    NR is R + DR,
+    NC is C + DC,
+    within_bounds(NR, NC),
+    \+ solved_cell(NR, NC, _),
+    assertz(solved_cell(NR, NC, green)),
+    N1 is N - 1,
+    expand_island(NR, NC, N1, Offsets),
+    expand_island(R, C, N1, Offsets).
+
+
+neighbor(R, C, R, C1) :- C1 is C + 1, within_bounds(R, C1).
+neighbor(R, C, R, C1) :- C1 is C - 1, within_bounds(R, C1).
+neighbor(R, C, R1, C) :- R1 is R + 1, within_bounds(R1, C).
+neighbor(R, C, R1, C) :- R1 is R - 1, within_bounds(R1, C).
+
+
+island_continuity :-
+    findall((R, C), potential_wall_area(R, C), WallAreas),
+    enforce_continuity(WallAreas).
+
+enforce_continuity([]).
+enforce_continuity([(R, C)|WallAreas]) :-
+    enforce_continuity(R, C),
+    enforce_continuity(WallAreas).
+enforce_continuity(R, C) :-
+    (   solved_cell(R, C, green)
+    ->  true
+    ;   (   neighbor(R, C, R1, C1),
+            solved_cell(R1, C1, green),
+            
+            assertz(solved_cell(R, C, green))
+        )
+    ).
+
+potential_wall_area(R, C) :-
+    between(1, 5, R),
+    between(1, 5, C),
+    \+ solved_cell(R, C, green),
+    \+ solved_cell(R, C, sea),
+    (   neighbor(R, C, R1, C1),
+        \+ solved_cell(R1, C1, green),
+        \+ solved_cell(R1, C1, sea)
+    ;   neighbor(R, C, R, C1),
+        \+ solved_cell(R, C1, green),
+        \+ solved_cell(R, C1, sea)
+    ;   neighbor(R, C, R1, C),
+        \+ solved_cell(R1, C, green),
+        \+ solved_cell(R1, C, sea)
+    ;   neighbor(R, C, R, C1),
+        \+ solved_cell(R, C1, green),
+        \+ solved_cell(R, C1, sea)
+    ).
